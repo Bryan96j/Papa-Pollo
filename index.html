@@ -190,6 +190,11 @@
             color: white;
         }
 
+        .day-double {
+            background: #ffd700;
+            color: #333;
+        }
+
         .day-cross {
             background: #ff6b6b;
             color: white;
@@ -343,6 +348,12 @@
             background: #38ef7d;
             color: white;
             border-color: #38ef7d;
+        }
+
+        .day-toggle.active-double {
+            background: #ffd700;
+            color: #333;
+            border-color: #ffd700;
         }
 
         .day-toggle.active-cross {
@@ -591,7 +602,7 @@
                 <i class="fas fa-chevron-left"></i>
             </button>
             <div class="date-display" onclick="showDatePicker()">
-                <span id="currentWeekRange">3/11/2025 - 9/11/2025</span>
+                <span id="currentWeekRange">Cargando...</span>
                 <input type="date" id="datePicker" onchange="updateFromPicker()">
             </div>
             <button onclick="changeWeek(1)">
@@ -728,7 +739,7 @@
         const DIAS_SEMANA = ['L', 'M', 'K', 'J', 'V', 'S', 'D'];
         
         // Inicializar con la semana actual (lunes a domingo)
-        let currentWeekStart = getMonday(new Date(2025, 10, 3)); // 3/11/2025 (lunes)
+        let currentWeekStart = getMonday(new Date()); // Semana actual (lunes)
         let turnosData = loadData('turnosData') || {};
         let horasData = loadData('horasData') || {};
         let editingTurnosId = null;
@@ -881,6 +892,22 @@
             editingTurnosId = null;
         }
 
+        // Alternar estado de día en turnos (check -> double -> cross -> check)
+        function toggleDayTurnos(element) {
+            if (element.classList.contains('active-check')) {
+                element.classList.remove('active-check');
+                element.classList.add('active-double');
+            } else if (element.classList.contains('active-double')) {
+                element.classList.remove('active-double');
+                element.classList.add('active-cross');
+            } else if (element.classList.contains('active-cross')) {
+                element.classList.remove('active-cross');
+                element.classList.add('active-check');
+            } else {
+                element.classList.add('active-check');
+            }
+        }
+
         // Agregar empleado al formulario de turnos
         function addTurnosEmpleado(data = null) {
             const container = document.getElementById('turnosEmpleadosContainer');
@@ -893,6 +920,10 @@
                     <label>Nombre del Empleado</label>
                     <input type="text" class="empleado-nombre" placeholder="Nombre" value="${data ? data.nombre : ''}">
                 </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Extras (₡)</label>
+                    <input type="number" min="0" step="0.01" class="empleado-extras" placeholder="0.00" value="${data ? (data.extras || 0) : 0}">
+                </div>
                 <div class="form-group">
                     <label>Días de la Semana</label>
                     <div class="days-grid">
@@ -900,8 +931,10 @@
                             let stateClass = '';
                             if (data && data.dias[index] === 'check') {
                                 stateClass = 'active-check';
-                            } else if (data && data.dias[index] === 'cross') {
-                                stateClass = 'active-cross';
+                            } else if (data && data.dias[index] === 'double') {
+                                stateClass = 'active-double';
+                            } else {
+                                stateClass = 'active-cross'; // Por defecto rojo
                             }
                             return `
                                 <div class="day-toggle ${stateClass}" 
@@ -921,19 +954,6 @@
             container.appendChild(empDiv);
         }
 
-        // Alternar estado de día en turnos (check -> cross -> check)
-        function toggleDayTurnos(element) {
-            if (element.classList.contains('active-check')) {
-                element.classList.remove('active-check');
-                element.classList.add('active-cross');
-            } else if (element.classList.contains('active-cross')) {
-                element.classList.remove('active-cross');
-                element.classList.add('active-check');
-            } else {
-                element.classList.add('active-check');
-            }
-        }
-
         // Guardar datos de turnos
         function saveTurnos() {
             const activacion = document.getElementById('turnosActivacion').value.trim();
@@ -948,17 +968,21 @@
             
             empleadosElements.forEach(empEl => {
                 const nombre = empEl.querySelector('.empleado-nombre').value.trim();
+                const extrasInput = empEl.querySelector('.empleado-extras').value;
+                const extras = parseFloat(extrasInput) || 0;
+                
                 if (nombre) {
                     const dias = [];
                     empEl.querySelectorAll('.day-toggle').forEach(dayEl => {
                         if (dayEl.classList.contains('active-check')) {
                             dias.push('check');
+                        } else if (dayEl.classList.contains('active-double')) {
+                            dias.push('double');
                         } else {
-                            // Por defecto es rojo (cross) si no está marcado
                             dias.push('cross');
                         }
                     });
-                    empleados.push({ nombre, dias });
+                    empleados.push({ nombre, dias, extras });
                 }
             });
             
@@ -974,12 +998,10 @@
             turnosData[weekKey][id] = {
                 activacion,
                 empleados,
-                // Fecha de la semana actual
                 fechaInicio: formatDateInput(currentWeekStart),
                 fechaFin: formatDateInput(getSunday(currentWeekStart))
             };
             
-            // Guardar en localStorage
             saveData('turnosData', turnosData);
             
             closeTurnosForm();
@@ -1045,6 +1067,10 @@
                     <label>Nombre del Empleado</label>
                     <input type="text" class="empleado-nombre" placeholder="Nombre" value="${data ? data.nombre : ''}">
                 </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Extras (₡)</label>
+                    <input type="number" min="0" step="0.01" class="empleado-extras" placeholder="0.00" value="${data ? (data.extras || 0) : 0}">
+                </div>
                 <div class="form-group">
                     <label>Horas por Día</label>
                     <div class="hours-input-grid">
@@ -1078,12 +1104,15 @@
             
             empleadosElements.forEach(empEl => {
                 const nombre = empEl.querySelector('.empleado-nombre').value.trim();
+                const extrasInput = empEl.querySelector('.empleado-extras').value;
+                const extras = parseFloat(extrasInput) || 0;
+                
                 if (nombre) {
                     const horas = [];
                     empEl.querySelectorAll('.hora-input').forEach(horaEl => {
                         horas.push(parseFloat(horaEl.value) || 0);
                     });
-                    empleados.push({ nombre, horas });
+                    empleados.push({ nombre, horas, extras });
                 }
             });
             
@@ -1099,12 +1128,10 @@
             horasData[weekKey][id] = {
                 activacion,
                 empleados,
-                // Fecha de la semana actual
                 fechaInicio: formatDateInput(currentWeekStart),
                 fechaFin: formatDateInput(getSunday(currentWeekStart))
             };
             
-            // Guardar en localStorage
             saveData('horasData', horasData);
             
             closeHorasForm();
@@ -1156,7 +1183,9 @@
                     </div>
                     ${item.empleados.map(emp => {
                         const turnosCount = emp.dias.filter(d => d === 'check').length;
-                        const total = turnosCount * PAGO_POR_TURNO;
+                        const dobleTurnosCount = emp.dias.filter(d => d === 'double').length;
+                        const totalTurnos = turnosCount + (dobleTurnosCount * 2);
+                        const total = (totalTurnos * PAGO_POR_TURNO) + (emp.extras || 0);
                         return `
                             <div class="employee-row">
                                 <div class="employee-name">${emp.nombre}</div>
@@ -1164,14 +1193,24 @@
                                     ${DIAS_SEMANA.map((dia, idx) => `
                                         <div class="day-cell day-header">${dia}</div>
                                     `).join('')}
-                                    ${emp.dias.map((estado, idx) => `
-                                        <div class="day-cell ${estado === 'check' ? 'day-check' : 'day-cross'}">
-                                            ${estado === 'check' ? '✓' : '✗'}
-                                        </div>
-                                    `).join('')}
+                                    ${emp.dias.map((estado, idx) => {
+                                        let dayClass = '';
+                                        let symbol = '';
+                                        if (estado === 'check') {
+                                            dayClass = 'day-check';
+                                            symbol = '✓';
+                                        } else if (estado === 'double') {
+                                            dayClass = 'day-double';
+                                            symbol = '✓✓';
+                                        } else {
+                                            dayClass = 'day-cross';
+                                            symbol = '✗';
+                                        }
+                                        return `<div class="day-cell ${dayClass}">${symbol}</div>`;
+                                    }).join('')}
                                 </div>
                                 <div class="total-amount">
-                                    <span class="total-label">Total:</span>
+                                    <span class="total-label">Turnos: ${totalTurnos} | Extras: ₡${(emp.extras || 0).toLocaleString('es-CR')}</span>
                                     <span class="total-value">₡${total.toLocaleString('es-CR')}</span>
                                 </div>
                             </div>
@@ -1213,7 +1252,7 @@
                     </div>
                     ${item.empleados.map(emp => {
                         const totalHoras = emp.horas.reduce((sum, h) => sum + h, 0);
-                        const total = totalHoras * PAGO_POR_HORA;
+                        const total = (totalHoras * PAGO_POR_HORA) + (emp.extras || 0);
                         return `
                             <div class="employee-row">
                                 <div class="employee-name">${emp.nombre}</div>
@@ -1228,7 +1267,7 @@
                                     `).join('')}
                                 </div>
                                 <div class="total-amount">
-                                    <span class="total-label">Total horas: ${totalHoras}h</span>
+                                    <span class="total-label">Total horas: ${totalHoras}h | Extras: ₡${(emp.extras || 0).toLocaleString('es-CR')}</span>
                                     <span class="total-value">₡${total.toLocaleString('es-CR')}</span>
                                 </div>
                             </div>
@@ -1257,5 +1296,4 @@
         renderAll();
     </script>
 </body>
-
 </html>
